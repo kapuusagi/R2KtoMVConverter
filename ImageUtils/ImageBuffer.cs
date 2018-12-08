@@ -288,6 +288,56 @@ namespace ImageUtils
         }
 
         /// <summary>
+        /// 反転させたイメージを得る。
+        /// </summary>
+        /// <param name="isHorizontalFlip">水平方向の反転有無</param>
+        /// <param name="isVerticalFlip">垂直方向の反転有無</param>
+        /// <returns>反転したイメージが変える。</returns>
+        public ImageBuffer GetFlippedImage(bool isHorizontalFlip, bool isVerticalFlip)
+        {
+            ImageBuffer retImage = new ImageBuffer(_width, _height);
+
+            unsafe {
+                byte* srcBuffer = (byte*)(BackBuffer);
+                byte* dstBuffer = (byte*)(retImage.BackBuffer);
+
+                for (int y = 0; y < _height; y++) {
+                    byte* dstp = dstBuffer + retImage.BackBufferStride * y;
+
+                    byte* srcp = srcBuffer;
+                    if (isVerticalFlip) {
+                        srcp += BackBufferStride * (_height - y - 1);
+                    } else {
+                        srcp += BackBufferStride * y;
+                    }
+                    if (isHorizontalFlip) {
+                        srcp += (BackBufferStride - 4);
+                        for (int x = 0; x < _width; x++) {
+                            dstp[0] = srcp[0];
+                            dstp[1] = srcp[1];
+                            dstp[2] = srcp[2];
+                            dstp[3] = srcp[3];
+                            srcp -= 4;
+                            dstp += 4;
+                        }
+                    } else {
+                        for (int x = 0; x < _width; x++) {
+                            dstp[0] = srcp[0];
+                            dstp[1] = srcp[1];
+                            dstp[2] = srcp[2];
+                            dstp[3] = srcp[3];
+                            srcp += 4;
+                            dstp += 4;
+                        }
+                    }
+                }
+            }
+
+            return retImage;
+        }
+
+
+        /// <summary>
         /// データを複製する。
         /// </summary>
         /// <returns>ImageBufferが返る。</returns>
