@@ -14,7 +14,7 @@ namespace R2KtoMVConverter
     {
         private ConvertRequest _request;
 
-        public ConvertJob(ConvertRequest request) 
+        public ConvertJob(ConvertRequest request)
         {
             _request = request;
         }
@@ -35,11 +35,7 @@ namespace R2KtoMVConverter
         public bool Execute()
         {
             foreach (string path in _request.Files) {
-                string dir = System.IO.Path.GetDirectoryName(path);
-                string fileName = System.IO.Path.GetFileNameWithoutExtension(path);
-                string outputPath = System.IO.Path.Combine(dir, fileName + "_rtk2000.png");
-
-                Convert(path, outputPath);
+                Convert(path);
             }
 
             return true;
@@ -49,8 +45,7 @@ namespace R2KtoMVConverter
         /// pathで指定されるファイルを変換し、outputPathに書き出す。
         /// </summary>
         /// <param name="path">ソースファイルパス</param>
-        /// <param name="outputPath">出力ファイルパス</param>
-        private static void Convert(string path, string outputPath)
+        private static void Convert(string path)
         {
             BitmapImage fileImage = new BitmapImage();
             fileImage.BeginInit();
@@ -63,33 +58,12 @@ namespace R2KtoMVConverter
             // ついでに(0,0)画素値を透過するピクセルとして処理し、該当ピクセルを透過する。
             ImageBuffer srcImage = ImageBuffer.FromBitmap(readImage);
 
-            ImageBuffer replacedImage = null;
             if (IsRPG2KCharachip(srcImage)) {
-                // RPGツクール2000の歩行グラフィック並び順を
-                // RPGツクールMV用のものに変更する。
-                replacedImage = ReplaceToMV(srcImage);
+                ConvertFrom2KCharSet(path, srcImage);
             } else if (IsRSaga3CharaImage(srcImage)) {
-                replacedImage = GenerateCharaDataFromRSaga312(srcImage);
+                ConvertFromRSagaData(path, srcImage);
             } else {
                 throw new NotSupportedException("Target file not supported. : " + path);
-            }
-
-
-            // 2倍に拡大する。
-            // バイリニアなどの処理は入っていない。
-            ImageBuffer x2Image = ImageScaler.Resize(replacedImage, 2.0, 2.0);
-
-            // 単純な2倍だと、外枠がギタギタなので、外枠を滑らかにする。
-            ImageBuffer smoothImage = ImageSmmother.SmoothOuterFrame(x2Image);
-            // 内部に対してフィルタ処理して、多少滑らかにする。
-            ImageBuffer filterredImage = ImageFilter.ProcessInternalPart(smoothImage, ImageFilters.M3x3Filter);
-
-            // 書き出す。
-            BitmapSource dstImage = filterredImage.ToBitmap();
-            using (var outputStream = System.IO.File.Create(outputPath)) {
-                var encoder = new PngBitmapEncoder();
-                encoder.Frames.Add(BitmapFrame.Create(dstImage));
-                encoder.Save(outputStream);
             }
         }
 
@@ -111,6 +85,89 @@ namespace R2KtoMVConverter
         private static bool IsRSaga3CharaImage(ImageBuffer srcImage)
         {
             return ((srcImage.Width == 176) && (srcImage.Height == 133));
+        }
+
+        /// <summary>
+        /// ツクール2000の歩行データを変換する。
+        /// </summary>
+        /// <param name="srcPath"></param>
+        /// <param name="srcImage"></param>
+        private static void ConvertFrom2KCharSet(string srcPath, ImageBuffer srcImage)
+        {
+            // RPGツクール2000の歩行グラフィック並び順を
+            // RPGツクールMV用のものに変更する。
+            ImageBuffer replacedImage = ReplaceToMV(srcImage);
+
+            // 2倍に拡大する。
+            // バイリニアなどの処理は入っていない。
+            ImageBuffer x2Image = ImageScaler.Resize(replacedImage, 2.0, 2.0);
+
+            // 単純な2倍だと、外枠がギタギタなので、外枠を滑らかにする。
+            ImageBuffer smoothImage = ImageSmmother.SmoothOuterFrame(x2Image);
+            // 内部に対してフィルタ処理して、多少滑らかにする。
+            ImageBuffer filterredImage = ImageFilter.ProcessInternalPart(smoothImage, ImageFilters.M3x3Filter);
+
+            // 書き出す。
+            BitmapSource dstImage = filterredImage.ToBitmap();
+
+            string dir = System.IO.Path.GetDirectoryName(srcPath);
+            string fileName = System.IO.Path.GetFileNameWithoutExtension(srcPath);
+            string outputPath = System.IO.Path.Combine(dir, fileName + "_rtk2000.png");
+
+            using (var outputStream = System.IO.File.Create(outputPath)) {
+                var encoder = new PngBitmapEncoder();
+                encoder.Frames.Add(BitmapFrame.Create(dstImage));
+                encoder.Save(outputStream);
+            }
+        }
+
+        /// <summary>
+        /// R.Sagaのデータを変換する。
+        /// </summary>
+        /// <param name="srcPath">パス</param>
+        /// <param name="srcImage">イメージデータ</param>
+        private static void ConvertFromRSagaData(string srcPath, ImageBuffer srcImage)
+        {
+            // 背景色を透明にする。
+            srcImage.TransparentByPixel(srcImage.GetPixel(0, 0));
+            srcImage.TransparentByPixel(srcImage.GetPixel(1, 1));
+
+            ImageBuffer charaChipData = GenerateCharaChipFromRSaga312(srcImage);
+            ImageBuffer battleGraphic = GenerateBattleGraphicFromRSaga312(srcImage);
+
+            // 2倍に拡大する。
+            // バイリニアなどの処理は入っていない。
+            ImageBuffer x2Image = ImageScaler.Resize(charaChipData, 2.0, 2.0);
+            ImageBuffer x2ImageBtl = ImageScaler.Resize(battleGraphic, 2.0, 2.0);
+
+            // 単純な2倍だと、外枠がギタギタなので、外枠を滑らかにする。
+            ImageBuffer smoothImage = ImageSmmother.SmoothOuterFrame(x2Image);
+            ImageBuffer smoothImageBtl = ImageSmmother.SmoothOuterFrame(x2ImageBtl);
+
+            // 内部に対してフィルタ処理して、多少滑らかにする。
+            ImageBuffer filterredImage = ImageFilter.ProcessInternalPart(smoothImage, ImageFilters.M3x3Filter);
+            ImageBuffer filterredImageBtl = ImageFilter.ProcessInternalPart(smoothImageBtl, ImageFilters.M3x3Filter);
+
+            // 書き出す。
+            BitmapSource dstImage = filterredImage.ToBitmap();
+
+            string dir = System.IO.Path.GetDirectoryName(srcPath);
+            string fileName = System.IO.Path.GetFileNameWithoutExtension(srcPath);
+            string outputPath = System.IO.Path.Combine(dir, "$" + fileName + "_rsg.png");
+
+            using (var outputStream = System.IO.File.Create(outputPath)) {
+                var encoder = new PngBitmapEncoder();
+                encoder.Frames.Add(BitmapFrame.Create(dstImage));
+                encoder.Save(outputStream);
+            }
+
+            BitmapSource dstImageBtl = filterredImageBtl.ToBitmap();
+            string outPathBtl = System.IO.Path.Combine(dir, fileName + "_btl_rsg.png");
+            using (var outputStream = System.IO.File.Create(outPathBtl)) {
+                var encoder = new PngBitmapEncoder();
+                encoder.Frames.Add(BitmapFrame.Create(dstImageBtl));
+                encoder.Save(outputStream);
+            }
         }
 
         /// <summary>
@@ -164,14 +221,10 @@ namespace R2KtoMVConverter
         /// </summary>
         /// <param name="srcImage">元画像</param>
         /// <returns></returns>
-        private static ImageBuffer GenerateCharaDataFromRSaga312(ImageBuffer srcImage)
+        private static ImageBuffer GenerateCharaChipFromRSaga312(ImageBuffer srcImage)
         {
-            // 背景色を透明にする。
-            srcImage.TransparentByPixel(srcImage.GetPixel(0, 0));
-            srcImage.TransparentByPixel(srcImage.GetPixel(1, 1));
-
             // 並び替えしつつ画像を生成する。
-            ImageBuffer replacedImage = new ImageBuffer(288, 256);
+            ImageBuffer replacedImage = new ImageBuffer(72, 128);
 
             int charWidth = 24;
             int charHeight = 32;
@@ -231,6 +284,201 @@ namespace R2KtoMVConverter
                 srcImage, 51, 42, 24, 24);
 
             return replacedImage;
+        }
+        /// <summary>
+        /// R.Saga3.12のキャラクタチップから生成する。
+        /// 
+        /// 
+        /// RPG2K相当の画角（キャラクタあたり 24x32）になるように構成。
+        /// 
+        /// </summary>
+        /// <param name="srcImage">元画像</param>
+        /// <returns></returns>
+        private static ImageBuffer GenerateBattleGraphicFromRSaga312(ImageBuffer srcImage)
+        {
+            ImageBuffer battleImage = new ImageBuffer(32 * 3 * 3, 32 * 6);
+
+            int leftTopX = 0;
+            int leftTopY = 0;
+
+            // 前進
+            battleImage.DrawRectangle(leftTopX + 4, leftTopY + 0,
+                srcImage, 76, 34, 24, 32);
+            battleImage.DrawRectangle(leftTopX + 36, leftTopY + 0,
+                srcImage, 101, 34, 24, 32);
+            battleImage.DrawRectangle(leftTopX + 68, leftTopY + 0,
+                srcImage, 76, 34, 24, 8);
+            battleImage.DrawRectangle(leftTopX + 68, leftTopY + 8,
+                srcImage, 126, 42, 24, 24);
+            leftTopY += 32;
+
+            // 通常待機
+            battleImage.DrawRectangle(leftTopX + 4, leftTopY + 0,
+                srcImage, 76, 1, 24, 8);
+            battleImage.DrawRectangle(leftTopX + 4, leftTopY + 8,
+                srcImage, 101, 9, 24, 24);
+            battleImage.DrawRectangle(leftTopX + 32, leftTopY,
+                battleImage, leftTopX, leftTopY, 32, 32);
+            battleImage.DrawRectangle(leftTopX + 64, leftTopY,
+                battleImage, leftTopX, leftTopY, 32, 32);
+            leftTopY += 32;
+
+
+            // 詠唱
+            battleImage.DrawRectangle(leftTopX + 4, leftTopY + 0,
+                srcImage, 51, 67, 24, 32);
+            battleImage.DrawRectangle(leftTopX + 4, leftTopY + 8,
+                srcImage, 76, 75, 16, 16);
+            battleImage.DrawRectangle(leftTopX + 32 + 4, leftTopY + 0,
+                srcImage, 51, 67, 24, 32);
+            battleImage.DrawRectangle(leftTopX + 64, leftTopY,
+                battleImage, leftTopX, leftTopY, 32, 32);
+            leftTopY += 32;
+
+            // 防御
+            battleImage.DrawRectangle(leftTopX + 4, leftTopY + 0,
+                srcImage, 26, 67, 24, 32);
+            battleImage.DrawRectangle(leftTopX + 32, leftTopY,
+                battleImage, leftTopX, leftTopY, 32, 32);
+            battleImage.DrawRectangle(leftTopX + 64, leftTopY,
+                battleImage, leftTopX, leftTopY, 32, 32);
+            leftTopY += 32;
+
+            // 被ダメ
+            battleImage.DrawRectangle(leftTopX + 4, leftTopY + 0,
+                srcImage, 126, 67, 24, 32);
+            battleImage.DrawRectangle(leftTopX + 32 + 5, leftTopY + 0,
+                srcImage, 126, 67, 24, 32);
+            battleImage.DrawRectangle(leftTopX + 64 + 7, leftTopY + 0,
+                srcImage, 126, 67, 24, 32);
+            leftTopY += 32;
+
+            // 回避
+            battleImage.DrawRectangle(leftTopX + 4 + 2, leftTopY + 0,
+                srcImage, 26, 67, 24, 32);
+            battleImage.DrawRectangle(leftTopX + 36 + 3, leftTopY + 0,
+                srcImage, 26, 67, 24, 32);
+            battleImage.DrawRectangle(leftTopX + 64 + 4, leftTopY + 0,
+                srcImage, 26, 67, 24, 32);
+            leftTopX += (32 * 3);
+            leftTopY = 0;
+
+            // 突き
+            battleImage.DrawRectangle(leftTopX + 4, leftTopY + 0,
+                srcImage, 76, 1, 24, 32);
+            battleImage.DrawRectangle(leftTopX + 4, leftTopY + 8,
+                srcImage, 151, 9, 16, 24);
+            battleImage.DrawRectangle(leftTopX + 32 + 2, leftTopY + 0,
+                srcImage, 101, 34, 24, 32);
+            battleImage.DrawRectangle(leftTopX + 64, leftTopY + 0,
+                srcImage, 26, 67, 24, 32);
+
+            leftTopY += 32;
+
+            // 振り
+            battleImage.DrawRectangle(leftTopX + 4, leftTopY + 0,
+                srcImage, 76, 1, 24, 32);
+            battleImage.DrawRectangle(leftTopX + 4, leftTopY + 8,
+                srcImage, 126, 9, 24, 24);
+            battleImage.DrawRectangle(leftTopX + 32 + 4, leftTopY + 0,
+                srcImage, 76, 1, 24, 32);
+            battleImage.DrawRectangle(leftTopX + 32 + 4, leftTopY + 8,
+                srcImage, 151, 9, 16, 24);
+            battleImage.DrawRectangle(leftTopX + 64 + 4, leftTopY + 0,
+                srcImage, 26, 67, 24, 32);
+
+            leftTopY += 32;
+
+            // 飛び道具
+            battleImage.DrawRectangle(leftTopX + 0 + 4, leftTopY + 0,
+                srcImage, 76, 1, 24, 32);
+            battleImage.DrawRectangle(leftTopX + 0 + 4, leftTopY + 8,
+                srcImage, 151, 9, 16, 24);
+            battleImage.DrawRectangle(leftTopX + 32, leftTopY,
+                battleImage, leftTopX, leftTopY, 32, 32);
+            battleImage.DrawRectangle(leftTopX + 64, leftTopY,
+                battleImage, leftTopX, leftTopY, 32, 32);
+
+            leftTopY += 32;
+
+            // 汎用スキル
+            battleImage.DrawRectangle(leftTopX + 4, leftTopY + 0,
+                srcImage, 26, 67, 24, 32);
+            battleImage.DrawRectangle(leftTopX + 32, leftTopY,
+                battleImage, leftTopX, leftTopY, 32, 32);
+            battleImage.DrawRectangle(leftTopX + 64, leftTopY,
+                battleImage, leftTopX, leftTopY, 32, 32);
+
+
+            leftTopY += 32;
+            // 魔法使用
+            battleImage.DrawRectangle(leftTopX + 4, leftTopY + 0,
+                srcImage, 101, 67, 24, 32);
+            battleImage.DrawRectangle(leftTopX + 32, leftTopY,
+                battleImage, leftTopX, leftTopY, 32, 32);
+            battleImage.DrawRectangle(leftTopX + 64, leftTopY,
+                battleImage, leftTopX, leftTopY, 32, 32);
+
+            leftTopY += 32;
+
+            // アイテム使用 (魔法使用をコピー)
+            battleImage.DrawRectangle(leftTopX, leftTopY,
+                battleImage, 32 * 3 * 1, 32 * 4, 32 * 3, 32);
+
+
+            leftTopX += (32 * 3);
+            leftTopY = 0;
+
+            // 逃げる　(前進の反転)
+            battleImage.DrawRectangle(leftTopX, leftTopY,
+                battleImage.GetRectangle(0, 0, 32 * 3, 32).GetFlippedImage(true, false));
+
+            leftTopY += 32;
+
+            // 勝利 (防御からコピー)
+            battleImage.DrawRectangle(leftTopX, leftTopY,
+                battleImage, 0, 32 * 3, 32 * 3, 32);
+
+            leftTopY += 32;
+
+            // 瀕死
+            battleImage.DrawRectangle(leftTopX + 4, leftTopY + 8,
+                srcImage, 151, 75, 24, 24);
+            battleImage.DrawRectangle(leftTopX + 32, leftTopY,
+                battleImage, leftTopX, leftTopY, 32, 32);
+            battleImage.DrawRectangle(leftTopX + 64, leftTopY,
+                battleImage, leftTopX, leftTopY, 32, 32);
+
+            leftTopY += 32;
+
+            // 状態異常
+            battleImage.DrawRectangle(leftTopX + 4, leftTopY + 8,
+                srcImage, 151, 75, 24, 24);
+            battleImage.DrawRectangle(leftTopX + 32, leftTopY,
+                battleImage, leftTopX, leftTopY, 32, 32);
+            battleImage.DrawRectangle(leftTopX + 64, leftTopY,
+                battleImage, leftTopX, leftTopY, 32, 32);
+
+            leftTopY += 32;
+
+            // 睡眠
+            battleImage.DrawRectangle(leftTopX + 0, leftTopY + 16,
+                srcImage, 51, 100, 32, 16);
+            battleImage.DrawRectangle(leftTopX + 32, leftTopY,
+                battleImage, leftTopX, leftTopY, 32, 32);
+            battleImage.DrawRectangle(leftTopX + 64, leftTopY,
+                battleImage, leftTopX, leftTopY, 32, 32);
+            leftTopY += 32;
+
+            // 戦闘不能
+            battleImage.DrawRectangle(leftTopX + 0, leftTopY + 16,
+                srcImage, 51, 100, 32, 16);
+            battleImage.DrawRectangle(leftTopX + 32, leftTopY,
+                battleImage, leftTopX, leftTopY, 32, 32);
+            battleImage.DrawRectangle(leftTopX + 64, leftTopY,
+                battleImage, leftTopX, leftTopY, 32, 32);
+
+            return battleImage;
         }
     }
 }
