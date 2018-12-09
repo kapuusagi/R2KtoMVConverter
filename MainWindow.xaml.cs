@@ -54,7 +54,9 @@ namespace R2KtoMVConverter
             }
 
             foreach (var file in values) {
-                ConvertJob convertJob = new ConvertJob(new ConvertRequest(new string[] { file }));
+                ConvertJob convertJob = new ConvertJob(
+                    new ConvertRequest(new string[] { file }, 
+                    Properties.Settings.Default.OutputDirectory));
                 Task task = new Task(() => {
                     try {
                         convertJob.Execute();
@@ -75,6 +77,32 @@ namespace R2KtoMVConverter
         private void ShowErrorMessageBox(string msg)
         {
             MessageBoxEx.Show(this, msg, Properties.Resources.MsgError);
+        }
+
+        private void Button_Click(object sender, RoutedEventArgs e)
+        {
+            var dialog = new System.Windows.Forms.FolderBrowserDialog();
+            dialog.Description = Properties.Resources.MsgSelectFolder;
+            if (System.IO.Directory.Exists(Properties.Settings.Default.OutputDirectory)) {
+                dialog.SelectedPath = Properties.Settings.Default.OutputDirectory;
+            } else { 
+                dialog.SelectedPath = System.Environment.GetFolderPath(System.Environment.SpecialFolder.Personal);
+            } 
+
+            if (dialog.ShowDialog() == System.Windows.Forms.DialogResult.OK) {
+                Properties.Settings.Default.OutputDirectory = dialog.SelectedPath;
+            }
+            labelOutputDirectory.Content = Properties.Settings.Default.OutputDirectory;
+        }
+
+        private void Window_Closed(object sender, EventArgs e)
+        {
+            Properties.Settings.Default.Save();
+        }
+
+        private void Window_Loaded(object sender, RoutedEventArgs e)
+        {
+                labelOutputDirectory.Content = Properties.Settings.Default.OutputDirectory;
         }
     }
 }

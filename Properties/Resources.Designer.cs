@@ -29,7 +29,7 @@ namespace R2KtoMVConverter.Properties {
         private static global::System.Globalization.CultureInfo resourceCulture;
         
         [global::System.Diagnostics.CodeAnalysis.SuppressMessageAttribute("Microsoft.Performance", "CA1811:AvoidUncalledPrivateCode")]
-        public Resources() {
+        internal Resources() {
         }
         
         /// <summary>
@@ -47,7 +47,7 @@ namespace R2KtoMVConverter.Properties {
         }
         
         /// <summary>
-        ///   すべてについて、現在のスレッドの CurrentUICulture プロパティをオーバーライドします
+        ///   厳密に型指定されたこのリソース クラスを使用して、すべての検索リソースに対し、
         ///   現在のスレッドの CurrentUICulture プロパティをオーバーライドします。
         /// </summary>
         [global::System.ComponentModel.EditorBrowsableAttribute(global::System.ComponentModel.EditorBrowsableState.Advanced)]
@@ -70,11 +70,38 @@ namespace R2KtoMVConverter.Properties {
         }
         
         /// <summary>
+        ///   Output Directory に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string LabelOutputDirectory {
+            get {
+                return ResourceManager.GetString("LabelOutputDirectory", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Select に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string LabelSelect {
+            get {
+                return ResourceManager.GetString("LabelSelect", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Error に類似しているローカライズされた文字列を検索します。
         /// </summary>
         public static string MsgError {
             get {
                 return ResourceManager.GetString("MsgError", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Select output folder. に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string MsgSelectFolder {
+            get {
+                return ResourceManager.GetString("MsgSelectFolder", resourceCulture);
             }
         }
         

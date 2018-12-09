@@ -35,7 +35,7 @@ namespace R2KtoMVConverter
         public bool Execute()
         {
             foreach (string path in _request.Files) {
-                Convert(path);
+                Convert(path, _request.OutputDirectory);
             }
 
             return true;
@@ -45,7 +45,9 @@ namespace R2KtoMVConverter
         /// pathで指定されるファイルを変換し、outputPathに書き出す。
         /// </summary>
         /// <param name="path">ソースファイルパス</param>
-        private static void Convert(string path)
+        /// <param name="outputDirectory">出力ディレクトリ。
+        /// nullまたは空文字列でソースと同じところに出力する。</param>
+        private static void Convert(string path, string outputDirectory)
         {
             BitmapImage fileImage = new BitmapImage();
             fileImage.BeginInit();
@@ -59,9 +61,9 @@ namespace R2KtoMVConverter
             ImageBuffer srcImage = ImageBuffer.FromBitmap(readImage);
 
             if (IsRPG2KCharachip(srcImage)) {
-                ConvertFrom2KCharSet(path, srcImage);
+                ConvertFrom2KCharSet(path, srcImage, outputDirectory);
             } else if (IsRSaga3CharaImage(srcImage)) {
-                ConvertFromRSagaData(path, srcImage);
+                ConvertFromRSagaData(path, srcImage, outputDirectory);
             } else {
                 throw new NotSupportedException("Target file not supported. : " + path);
             }
@@ -92,7 +94,7 @@ namespace R2KtoMVConverter
         /// </summary>
         /// <param name="srcPath"></param>
         /// <param name="srcImage"></param>
-        private static void ConvertFrom2KCharSet(string srcPath, ImageBuffer srcImage)
+        private static void ConvertFrom2KCharSet(string srcPath, ImageBuffer srcImage, string outputDirectory)
         {
             // RPGツクール2000の歩行グラフィック並び順を
             // RPGツクールMV用のものに変更する。
@@ -110,9 +112,8 @@ namespace R2KtoMVConverter
             // 書き出す。
             BitmapSource dstImage = filterredImage.ToBitmap();
 
-            string dir = System.IO.Path.GetDirectoryName(srcPath);
-            string fileName = System.IO.Path.GetFileNameWithoutExtension(srcPath);
-            string outputPath = System.IO.Path.Combine(dir, fileName + "_rtk2000.png");
+            string outputPath = GenerateOutputFilePath(srcPath,
+                outputDirectory, "", "_rtk2000.png");
 
             using (var outputStream = System.IO.File.Create(outputPath)) {
                 var encoder = new PngBitmapEncoder();
@@ -126,7 +127,7 @@ namespace R2KtoMVConverter
         /// </summary>
         /// <param name="srcPath">パス</param>
         /// <param name="srcImage">イメージデータ</param>
-        private static void ConvertFromRSagaData(string srcPath, ImageBuffer srcImage)
+        private static void ConvertFromRSagaData(string srcPath, ImageBuffer srcImage, string outputDirectory)
         {
             // 背景色を透明にする。
             srcImage.TransparentByPixel(srcImage.GetPixel(0, 0));
@@ -151,10 +152,8 @@ namespace R2KtoMVConverter
             // 書き出す。
             BitmapSource dstImage = filterredImage.ToBitmap();
 
-            string dir = System.IO.Path.GetDirectoryName(srcPath);
-            string fileName = System.IO.Path.GetFileNameWithoutExtension(srcPath);
-            string outputPath = System.IO.Path.Combine(dir, "$" + fileName + "_rsg.png");
-
+            string outputPath = GenerateOutputFilePath(srcPath, outputDirectory,
+                "$","_rsg.png");
             using (var outputStream = System.IO.File.Create(outputPath)) {
                 var encoder = new PngBitmapEncoder();
                 encoder.Frames.Add(BitmapFrame.Create(dstImage));
@@ -162,7 +161,8 @@ namespace R2KtoMVConverter
             }
 
             BitmapSource dstImageBtl = filterredImageBtl.ToBitmap();
-            string outPathBtl = System.IO.Path.Combine(dir, fileName + "_btl_rsg.png");
+            string outPathBtl = GenerateOutputFilePath(srcPath, outputDirectory,
+                "", "_btl_rsg.png");
             using (var outputStream = System.IO.File.Create(outPathBtl)) {
                 var encoder = new PngBitmapEncoder();
                 encoder.Frames.Add(BitmapFrame.Create(dstImageBtl));
@@ -301,15 +301,13 @@ namespace R2KtoMVConverter
             int leftTopX = 0;
             int leftTopY = 0;
 
-            // 前進
+            // 前進 (コマンド選択中も表示される。)
             battleImage.DrawRectangle(leftTopX + 4, leftTopY + 0,
-                srcImage, 76, 34, 24, 32);
-            battleImage.DrawRectangle(leftTopX + 36, leftTopY + 0,
-                srcImage, 101, 34, 24, 32);
-            battleImage.DrawRectangle(leftTopX + 68, leftTopY + 0,
-                srcImage, 76, 34, 24, 8);
-            battleImage.DrawRectangle(leftTopX + 68, leftTopY + 8,
-                srcImage, 126, 42, 24, 24);
+                srcImage, 26, 67, 24, 32);
+            battleImage.DrawRectangle(leftTopX + 32, leftTopY,
+                battleImage, leftTopX, leftTopY, 32, 32);
+            battleImage.DrawRectangle(leftTopX + 64, leftTopY,
+                battleImage, leftTopX, leftTopY, 32, 32);
             leftTopY += 32;
 
             // 通常待機
@@ -354,11 +352,11 @@ namespace R2KtoMVConverter
             leftTopY += 32;
 
             // 回避
-            battleImage.DrawRectangle(leftTopX + 4 + 2, leftTopY + 0,
+            battleImage.DrawRectangle(leftTopX + 0 + 7, leftTopY + 0,
                 srcImage, 26, 67, 24, 32);
-            battleImage.DrawRectangle(leftTopX + 36 + 3, leftTopY + 0,
+            battleImage.DrawRectangle(leftTopX + 32 + 7, leftTopY + 0,
                 srcImage, 26, 67, 24, 32);
-            battleImage.DrawRectangle(leftTopX + 64 + 4, leftTopY + 0,
+            battleImage.DrawRectangle(leftTopX + 64 + 7, leftTopY + 0,
                 srcImage, 26, 67, 24, 32);
             leftTopX += (32 * 3);
             leftTopY = 0;
@@ -368,8 +366,10 @@ namespace R2KtoMVConverter
                 srcImage, 76, 1, 24, 32);
             battleImage.DrawRectangle(leftTopX + 4, leftTopY + 8,
                 srcImage, 151, 9, 16, 24);
-            battleImage.DrawRectangle(leftTopX + 32 + 2, leftTopY + 0,
-                srcImage, 101, 34, 24, 32);
+            //battleImage.DrawRectangle(leftTopX + 32, leftTopY + 0,
+            //    srcImage, 101, 34, 24, 32);
+            battleImage.DrawRectangle(leftTopX + 32, leftTopY + 0,
+                srcImage, 26, 67, 24, 32);
             battleImage.DrawRectangle(leftTopX + 64, leftTopY + 0,
                 srcImage, 26, 67, 24, 32);
 
@@ -380,10 +380,12 @@ namespace R2KtoMVConverter
                 srcImage, 76, 1, 24, 32);
             battleImage.DrawRectangle(leftTopX + 4, leftTopY + 8,
                 srcImage, 126, 9, 24, 24);
+            //battleImage.DrawRectangle(leftTopX + 32 + 4, leftTopY + 0,
+            //    srcImage, 76, 1, 24, 32);
+            //battleImage.DrawRectangle(leftTopX + 32 + 4, leftTopY + 8,
+            //    srcImage, 151, 9, 16, 24);
             battleImage.DrawRectangle(leftTopX + 32 + 4, leftTopY + 0,
-                srcImage, 76, 1, 24, 32);
-            battleImage.DrawRectangle(leftTopX + 32 + 4, leftTopY + 8,
-                srcImage, 151, 9, 16, 24);
+                srcImage, 26, 67, 24, 32);
             battleImage.DrawRectangle(leftTopX + 64 + 4, leftTopY + 0,
                 srcImage, 26, 67, 24, 32);
 
@@ -430,8 +432,16 @@ namespace R2KtoMVConverter
             leftTopY = 0;
 
             // 逃げる　(前進の反転)
+            battleImage.DrawRectangle(leftTopX + 4, leftTopY + 0,
+                srcImage, 76, 34, 24, 32);
+            battleImage.DrawRectangle(leftTopX + 36, leftTopY + 0,
+                srcImage, 101, 34, 24, 32);
+            battleImage.DrawRectangle(leftTopX + 68, leftTopY + 0,
+                srcImage, 76, 34, 24, 8);
+            battleImage.DrawRectangle(leftTopX + 68, leftTopY + 8,
+                srcImage, 126, 42, 24, 24);
             battleImage.DrawRectangle(leftTopX, leftTopY,
-                battleImage.GetRectangle(0, 0, 32 * 3, 32).GetFlippedImage(true, false));
+                battleImage.GetRectangle(leftTopX, leftTopY, 32 * 3, 32).GetFlippedImage(true, false));
 
             leftTopY += 32;
 
@@ -479,6 +489,29 @@ namespace R2KtoMVConverter
                 battleImage, leftTopX, leftTopY, 32, 32);
 
             return battleImage;
+        }
+
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="srcPath">ソースパス</param>
+        /// <param name="outputDirectory">出力ディレクトリ</param>
+        /// <param name="prefix">プリフィックス</param>
+        /// <param name="suffix">サフィックス</param>
+        /// <returns></returns>
+        private static string GenerateOutputFilePath(string srcPath, string outputDirectory, string prefix, string suffix)
+        {
+            string srcDir = System.IO.Path.GetDirectoryName(srcPath);
+            string fileName = System.IO.Path.GetFileNameWithoutExtension(srcPath);
+
+            string dir = null;
+            if ((outputDirectory == null) || (outputDirectory.Length == 0)) {
+                dir = srcDir;
+            } else {
+                dir = outputDirectory;
+            }
+
+            return System.IO.Path.Combine(dir, prefix + fileName + suffix);
         }
     }
 }

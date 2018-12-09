@@ -120,8 +120,17 @@
   <data name="LabelMessage" xml:space="preserve">
     <value>ここにドラッグ。</value>
   </data>
+  <data name="LabelOutputDirectory" xml:space="preserve">
+    <value>出力ディレクトリ</value>
+  </data>
+  <data name="LabelSelect" xml:space="preserve">
+    <value>選択</value>
+  </data>
   <data name="MsgError" xml:space="preserve">
     <value>エラー</value>
+  </data>
+  <data name="MsgSelectFolder" xml:space="preserve">
+    <value>出力フォルダを選択</value>
   </data>
   <data name="WindowTitle" xml:space="preserve">
     <value>メインウィンドウ</value>

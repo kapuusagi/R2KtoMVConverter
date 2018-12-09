@@ -7,12 +7,20 @@
         xmlns:Properties="clr-namespace:R2KtoMVConverter.Properties" x:Class="R2KtoMVConverter.MainWindow"
         mc:Ignorable="d"
         Title="{Binding WindowTitle, Mode=OneWay}" Height="240" Width="320"
-    AllowDrop="True" PreviewDragOver="Window_PreviewDragOver" Drop="Window_Drop">
+    AllowDrop="True" PreviewDragOver="Window_PreviewDragOver" Drop="Window_Drop"
+    Loaded="Window_Loaded"
+    Closed="Window_Closed">
     <Window.DataContext>
         <Properties:Resources/>
     </Window.DataContext>
-    <Grid>
+    <DockPanel>
+        <DockPanel DockPanel.Dock="Bottom" Margin="4,2,4,4">
+            <Label DockPanel.Dock="Left" Content="{Binding LabelOutputDirectory, Mode=OneWay}"/>
+            <Button DockPanel.Dock="Right" Click="Button_Click" Content="{Binding LabelSelect, Mode=OneWay}" Padding="4,2,4,2"/>
+            <Label Name="labelOutputDirectory" Margin="8,2,8,2" ToolTip="{Binding DataContext, RelativeSource={RelativeSource Self}}" />
+        </DockPanel>
+        <Separator DockPanel.Dock="Bottom" />
         <Label HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="24"
                Content="{Binding LabelMessage, Mode=OneWay}"/>
-    </Grid>
+    </DockPanel>
 </Window>

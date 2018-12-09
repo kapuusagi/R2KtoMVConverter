@@ -120,8 +120,17 @@
   <data name="LabelMessage" xml:space="preserve">
     <value>Drag image file to here.</value>
   </data>
+  <data name="LabelOutputDirectory" xml:space="preserve">
+    <value>Output Directory</value>
+  </data>
+  <data name="LabelSelect" xml:space="preserve">
+    <value>Select</value>
+  </data>
   <data name="MsgError" xml:space="preserve">
     <value>Error</value>
+  </data>
+  <data name="MsgSelectFolder" xml:space="preserve">
+    <value>Select output folder.</value>
   </data>
   <data name="WindowTitle" xml:space="preserve">
     <value>MainWindow</value>
