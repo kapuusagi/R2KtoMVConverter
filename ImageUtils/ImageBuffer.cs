@@ -13,7 +13,7 @@ namespace ImageUtils
     /// BGRA32bit形式に特化した画像バッファクラス。
     /// 画像の左上を原点(0,0)として、右下が正。
     /// </summary>
-    public class ImageBuffer
+    public class ImageBuffer : IDisposable
     {
         /// <summary>
         /// 透過色
@@ -23,7 +23,8 @@ namespace ImageUtils
         /// <summary>
         /// イメージバッファ
         /// </summary>
-        private IntPtr _imageBuffer; // BGRA, BGRA, BGRA ...
+        private byte[] _backBuffer; // BGRA BGRA.....
+        // private IntPtr _backBuffer; // BGRA BGRA ....
 
         /// <summary>
         /// 幅
@@ -38,6 +39,9 @@ namespace ImageUtils
         /// </summary>
         private readonly int _backBufferStride;
 
+        private bool _isDisposed;
+
+
         /// <summary>
         /// 新しいImageBufferを構築する。
         /// </summary>
@@ -51,10 +55,12 @@ namespace ImageUtils
             _width = width;
             _backBufferStride = _width * 4;
             _height = height;
+            _isDisposed = false;
             if ((width > 0) && (height > 0)) {
-                _imageBuffer = Marshal.AllocCoTaskMem(Marshal.SizeOf(typeof(byte)) * _backBufferStride * _height);
+                _backBuffer = new byte[_backBufferStride * _height];
+                Clear();
             } else {
-                _imageBuffer = IntPtr.Zero;
+                _backBuffer = null;
             }
         }
 
@@ -63,6 +69,27 @@ namespace ImageUtils
         /// </summary>
         public ImageBuffer() : this(0, 0)
         {
+        }
+
+        protected virtual void Dispose(bool isDisposing)
+        {
+            if (_isDisposed) {
+                return;
+            }
+
+
+            _isDisposed = true;
+        }
+
+        public void Dispose()
+        {
+            Dispose(true);
+            GC.SuppressFinalize(this);
+        }
+
+        public void Clear()
+        {
+            Array.Clear(_backBuffer, 0, _backBuffer.Length);
         }
 
         /// <summary>
@@ -85,15 +112,6 @@ namespace ImageUtils
         public int BackBufferStride
         {
             get { return _width * 4; }
-        }
-
-        /// <summary>
-        /// バックバッファを取得するプロパティ。
-        /// </summary>
-        public IntPtr BackBuffer
-        {
-            get { return _imageBuffer; }
-            
         }
 
         /// <summary>
@@ -167,15 +185,9 @@ namespace ImageUtils
                 return Transparent;
             }
 
-            unsafe {
-                byte* srcp = (byte*)(_imageBuffer) + (_width * y + x) * 4;
-
-                return Color.FromArgb(
-                    srcp[3], // A 
-                    srcp[2], // R
-                    srcp[1], // G
-                    srcp[0]); // B
-            }
+            int offset = _backBufferStride * y + 4 * x;
+            return Color.FromArgb(_backBuffer[offset + 3], _backBuffer[offset + 2],
+                _backBuffer[offset + 1], _backBuffer[offset + 0]);
         }
 
         /// <summary>
@@ -198,15 +210,7 @@ namespace ImageUtils
                 y = _height - 1;
             }
 
-            unsafe {
-                byte* srcp = (byte*)(_imageBuffer) + (_width * y + x) * 4;
-
-                return Color.FromArgb(
-                    srcp[3], // A 
-                    srcp[2], // R
-                    srcp[1], // G
-                    srcp[0]); // B
-            }
+            return GetPixel(x, y);
         }
 
         /// <summary>
@@ -221,13 +225,11 @@ namespace ImageUtils
                 return;
             }
 
-            unsafe {
-                byte* srcp = (byte*)(_imageBuffer) + (_width * y + x) * 4;
-                srcp[3] = c.A; // A 
-                srcp[2] = c.R; // R
-                srcp[1] = c.G; // G
-                srcp[0] = c.B; // B
-            }
+            int offset = _backBufferStride * y + x * 4;
+            _backBuffer[offset + 3] = c.A;
+            _backBuffer[offset + 2] = c.R;
+            _backBuffer[offset + 1] = c.G;
+            _backBuffer[offset + 0] = c.B;
         }
 
         /// <summary>
@@ -236,33 +238,7 @@ namespace ImageUtils
         /// <returns>BitmapSourceオブジェクトが返る</returns>
         public BitmapSource ToBitmap()
         {
-            WriteableBitmap wb = new WriteableBitmap(_width, _height, 96, 96, PixelFormats.Bgra32, null);
-
-            try {
-                wb.Lock();
-                unsafe {
-                    byte* dstBuffer = (byte*)(wb.BackBuffer);
-                    byte* srcBuffer = (byte*)(_imageBuffer);
-
-                    for (int y = 0; y < _height; y++) {
-                        byte* srcp = srcBuffer + BackBufferStride * y;
-                        byte* dstp = dstBuffer + wb.BackBufferStride * y;
-                        for (int x = 0; x < _width; x++) {
-                            dstp[0] = srcp[0]; // B
-                            dstp[1] = srcp[1]; // G
-                            dstp[2] = srcp[2]; // R
-                            dstp[3] = srcp[3]; // A
-                            srcp += 4;
-                            dstp += 4;
-                        }
-                    }
-                }
-                wb.AddDirtyRect(new System.Windows.Int32Rect(0, 0, _width, _height));
-                return wb;
-            }
-            finally {
-                wb.Unlock();
-            }
+            return BitmapSource.Create(_width, _height, 96, 96, PixelFormats.Bgra32, null, _backBuffer, _backBufferStride);
         }
 
         /// <summary>
@@ -271,20 +247,20 @@ namespace ImageUtils
         /// <param name="c"></param>
         public void TransparentByPixel(Color c)
         {
-            unsafe {
-                for (int y = 0; y < _height; y++) {
-                    byte* ptr = (byte*)(_imageBuffer) + _backBufferStride * y;
-                    for (int x = 0; x < _width; x++) {
-                        if ((ptr[0] == c.B) && (ptr[1] == c.G) && (ptr[2] == c.R)) {
-                            ptr[0] = 0;
-                            ptr[1] = 0;
-                            ptr[2] = 0;
-                            ptr[3] = 0;
-                        }
-                        ptr += 4;
+            for (int y = 0; y < _height; y++) {
+                int offset = _backBufferStride * y;
+                for (int x = 0; x < _width; x++) {
+                    if ((_backBuffer[offset + 0] == c.B) 
+                        && (_backBuffer[offset + 1] == c.G) && (_backBuffer[offset + 2] == c.R)) {
+                        _backBuffer[offset + 0] = 0;
+                        _backBuffer[offset + 1] = 0;
+                        _backBuffer[offset + 2] = 0;
+                        _backBuffer[offset + 3] = 0;
                     }
+                    offset += 4;
                 }
             }
+
         }
 
         /// <summary>
@@ -297,39 +273,27 @@ namespace ImageUtils
         {
             ImageBuffer retImage = new ImageBuffer(_width, _height);
 
-            unsafe {
-                byte* srcBuffer = (byte*)(BackBuffer);
-                byte* dstBuffer = (byte*)(retImage.BackBuffer);
+            for (int y = 0; y < _height; y++) {
+                int dstOffset = retImage.BackBufferStride * y;
+                int srcOffset = 0;
+                if (isVerticalFlip) {
+                    srcOffset += _backBufferStride * (_height - y - 1);
+                } else {
+                    srcOffset += _backBufferStride * y;
+                }
 
-                for (int y = 0; y < _height; y++) {
-                    byte* dstp = dstBuffer + retImage.BackBufferStride * y;
-
-                    byte* srcp = srcBuffer;
-                    if (isVerticalFlip) {
-                        srcp += BackBufferStride * (_height - y - 1);
-                    } else {
-                        srcp += BackBufferStride * y;
+                if (isHorizontalFlip) {
+                    srcOffset += _backBufferStride - 4;
+                    for (int x = 0; x < _width; x++) {
+                        retImage._backBuffer[dstOffset + 0] = _backBuffer[srcOffset + 0];
+                        retImage._backBuffer[dstOffset + 1] = _backBuffer[srcOffset + 1];
+                        retImage._backBuffer[dstOffset + 2] = _backBuffer[srcOffset + 2];
+                        retImage._backBuffer[dstOffset + 3] = _backBuffer[srcOffset + 3];
+                        srcOffset -= 4;
+                        dstOffset += 4;
                     }
-                    if (isHorizontalFlip) {
-                        srcp += (BackBufferStride - 4);
-                        for (int x = 0; x < _width; x++) {
-                            dstp[0] = srcp[0];
-                            dstp[1] = srcp[1];
-                            dstp[2] = srcp[2];
-                            dstp[3] = srcp[3];
-                            srcp -= 4;
-                            dstp += 4;
-                        }
-                    } else {
-                        for (int x = 0; x < _width; x++) {
-                            dstp[0] = srcp[0];
-                            dstp[1] = srcp[1];
-                            dstp[2] = srcp[2];
-                            dstp[3] = srcp[3];
-                            srcp += 4;
-                            dstp += 4;
-                        }
-                    }
+                } else {
+                    Array.Copy(_backBuffer, srcOffset, retImage._backBuffer, dstOffset, _backBufferStride);
                 }
             }
 
@@ -345,17 +309,7 @@ namespace ImageUtils
         {
             ImageBuffer dst = new ImageBuffer(Width, Height);
 
-            unsafe {
-                byte* srcp = (byte*)(_imageBuffer);
-                byte* dstp = (byte*)(dst._imageBuffer);
-                int length = _backBufferStride * Height;
-                for (int i = 0; i < length; i++) {
-                    *dstp = *srcp;
-                    dstp++;
-                    srcp++;
-                }
-
-            }
+            Array.Copy(dst._backBuffer, _backBuffer, _backBuffer.Length);
 
             return dst;
         }
@@ -384,28 +338,39 @@ namespace ImageUtils
                 ImageBuffer dstImage = new ImageBuffer(width, height);
                 unsafe {
                     byte* srcBuffer = (byte*)(wb.BackBuffer);
-                    byte* dstBuffer = (byte*)(dstImage.BackBuffer);
 
                     for (int y = 0; y < height; y++) {
                         byte* srcp = srcBuffer + lineByteSize * y;
-                        byte* dstp = dstBuffer + dstImage.BackBufferStride * y;
+                        int dstOffset = dstImage._backBufferStride * y;
+
                         for (int x = 0; x < width; x++) {
-                            dstp[0] = srcp[0]; // B
-                            dstp[1] = srcp[1]; // G
-                            dstp[2] = srcp[2]; // R
-                            dstp[3] = srcp[3]; // A
+                            dstImage._backBuffer[dstOffset + 0] = srcp[0];
+                            dstImage._backBuffer[dstOffset + 1] = srcp[1];
+                            dstImage._backBuffer[dstOffset + 2] = srcp[2];
+                            dstImage._backBuffer[dstOffset + 3] = srcp[3];
 
                             srcp += 4;
-                            dstp += 4;
+                            dstOffset += 4;
                         }
                     }
+
+                    return dstImage;
                 }
-                return dstImage;
             }
             finally {
                 wb.Unlock();
             }
         }
 
+        /// <summary>
+        /// ピクセルが有効範囲かどうかを判定する。
+        /// </summary>
+        /// <param name="x"></param>
+        /// <param name="y"></param>
+        /// <returns></returns>
+        public bool Contains(int x, int y)
+        {
+            return ((x >= 0) && (x < _width) && (y >= 0) && (y < _height));
+        }
     }
 }
