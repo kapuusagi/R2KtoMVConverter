@@ -71,6 +71,11 @@ namespace ImageUtils
         {
         }
 
+        ~ImageBuffer()
+        {
+            Dispose(false);
+        }
+
         protected virtual void Dispose(bool isDisposing)
         {
             if (_isDisposed) {
