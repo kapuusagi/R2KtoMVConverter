@@ -72,7 +72,7 @@
     <Compile Include="ImageUtils\ImageFilter.cs" />
     <Compile Include="ImageUtils\ImageFilters.cs" />
     <Compile Include="ImageUtils\ImageScaler.cs" />
-    <Compile Include="ImageUtils\ImageSmmother.cs" />
+    <Compile Include="ImageUtils\ImageSmoother.cs" />
     <Compile Include="ImageUtils\PixelGenerators.cs" />
     <Compile Include="MainWindow.xaml.cs">
       <DependentUpon>MainWindow.xaml</DependentUpon>

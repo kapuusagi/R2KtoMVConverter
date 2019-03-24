@@ -9,7 +9,7 @@ namespace ImageUtils
     /// <summary>
     /// エッジを滑らかにする
     /// </summary>
-    public class ImageSmmother
+    public class ImageSmoother
     {
         /// <summary>
         /// 外枠を滑らかにする
